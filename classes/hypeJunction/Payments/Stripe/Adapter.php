@@ -167,10 +167,17 @@ class Adapter implements GatewayInterface {
 				return $payment->stripe_refund_id;
 			}, $payments);
 
+			$processor_fee = $transaction->getProcessorFee()->getAmount();
+
 			foreach ($charge->refunds->AutoPagingIterator() as $stripe_refund) {
+
 				if (in_array($stripe_refund->id, $payment_ids)) {
 					continue;
 				}
+
+				$stripe_balance_transaction = \Stripe\BalanceTransaction::retrieve($stripe_refund->balance_transaction);
+				$processor_fee += $stripe_balance_transaction->fee;
+				
 				$refund = new Refund();
 				$refund->setTimeCreated((int) $stripe_refund->created)
 						->setAmount(new Amount(-$stripe_refund->amount, strtoupper($stripe_refund->currency)))
@@ -189,6 +196,8 @@ class Adapter implements GatewayInterface {
 					$transaction->setStatus(TransactionInterface::STATUS_PARTIALLY_REFUNDED);
 				}
 			}
+
+			$transaction->setProcessorFee(new Amount($processor_fee, $charge->currency));
 		} else {
 			if ($transaction->status != TransactionInterface::STATUS_PAID) {
 				$payment = new Payment();
@@ -199,6 +208,10 @@ class Adapter implements GatewayInterface {
 				$payment->stripe_payment_id = $charge->id;
 				$transaction->addPayment($payment);
 				$transaction->setStatus(TransactionInterface::STATUS_PAID);
+
+				$stripe_balance_transaction = \Stripe\BalanceTransaction::retrieve($charge->balance_transaction);
+
+				$transaction->setProcessorFee(new Amount($stripe_balance_transaction->fee, $stripe_balance_transaction->currency));
 			}
 		}
 	}
