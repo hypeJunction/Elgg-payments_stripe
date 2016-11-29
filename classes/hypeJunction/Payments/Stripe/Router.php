@@ -39,7 +39,7 @@ class Router {
 				break;
 		}
 
-		if ($forward_url) {
+		if (isset($forward_url)) {
 			forward($forward_url, $forward_reason);
 		}
 	}
